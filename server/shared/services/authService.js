@@ -18,6 +18,29 @@ class AuthService {
     const accessToken = this.tokenService.sign({ id: record.id, phone: record.phone, displayName: record.display_name });
     return { user: this.toSafeUser(record), accessToken };
   }
+  
+  async login({ phone, password }) {
+    const user = this.userRepository.findByPhone(phone);
+    if (!user) {
+      throw new Error('Thông tin đăng nhập không đúng');
+    }
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      throw new Error('Thông tin đăng nhập không đúng');
+    }
+    const accessToken = this.tokenService.sign({ id: user.id, phone: user.phone, displayName: user.display_name });
+    return { user: this.toSafeUser(user), accessToken };
+  }
+
+  toSafeUser(record) {
+    return {
+      id: record.id,
+      phone: record.phone,
+      displayName: record.display_name,
+      avatarUrl: record.avatar_url,
+      bio: record.bio
+    };
+  }
 }
 
 module.exports = AuthService;
