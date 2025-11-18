@@ -1,0 +1,38 @@
+const MessageEntity = require('../entities/messageEntity');
+const eventBus = require('../../core/eventBus');
+
+class ChatService {
+  constructor({ messageRepository, fileRepository, roomService }) {
+    this.messageRepository = messageRepository;
+    this.fileRepository = fileRepository;
+    this.roomService = roomService;
+  }
+
+  sendMessage({ roomId, senderId, content, type = 'text', metadata = null }, options = {}) {
+    // Skip permission check for system messages (like call history)
+    if (!options.skipPermissionCheck) {
+      this.roomService.ensureMember(roomId, senderId);
+    }
+    const entity = new MessageEntity({ roomId, senderId, content, type, metadata });
+    const record = this.messageRepository.create(entity);
+    const formatted = this.formatMessage(record);
+    if (!options.silent) {
+      eventBus.emit('message:created', { roomId, message: formatted });
+    }
+    return formatted;
+  }
+
+  getHistory({ roomId, userId, before, limit = 30 }) {
+    this.roomService.ensureMember(roomId, userId);
+    const messages = this.messageRepository.listByRoom(roomId, limit, before);
+    const fileMap = new Map();
+    const files = this.fileRepository.listByMessageIds(messages.map((m) => m.id));
+    files.forEach((file) => {
+      if (!fileMap.has(file.message_id)) {
+        fileMap.set(file.message_id, []);
+      }
+      fileMap.get(file.message_id).push(file);
+    });
+
+  }
+}
