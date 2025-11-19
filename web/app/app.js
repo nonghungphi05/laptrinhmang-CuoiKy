@@ -130,3 +130,76 @@ async function startApp() {
   wsClient.connect(store.getState().token);
   await loadInitialData();
 }
+
+async function loadInitialData() {
+  hydrateDataFromCache();
+  const [friends, requests, rooms] = await Promise.all([
+    http.get("/friends"),
+    http.get("/friends/requests"),
+    http.get("/rooms"),
+  ]);
+  const formattedRooms = formatRooms(rooms);
+  store.setFriends(friends);
+  store.setFriendRequests(requests);
+  store.setRooms(formattedRooms);
+  persistDataCache({
+    friends,
+    friendRequests: requests,
+    rooms: formattedRooms,
+  });
+
+  let targetRoomId = null;
+
+  // Restore last room from localStorage
+  const lastRoomId = localStorage.getItem("messzola_last_room");
+  if (lastRoomId && formattedRooms.find((r) => r.id === lastRoomId)) {
+    // Room still exists, restore it without changing current view
+    store.setCurrentRoom(lastRoomId, { switchToChat: false });
+    targetRoomId = lastRoomId;
+  } else if (!store.getState().currentRoomId && rooms.length) {
+    // No saved room or room doesn't exist, use first room (but keep view as-is)
+    const fallbackRoomId = formattedRooms[0]?.id;
+    if (fallbackRoomId) {
+      store.setCurrentRoom(fallbackRoomId, { switchToChat: false });
+      targetRoomId = fallbackRoomId;
+    }
+  }
+
+  if (targetRoomId) {
+    scheduleHistoryLoad(targetRoomId, { defer: true });
+  }
+}
+
+function formatRooms(rooms) {
+  return rooms.map((room) => ({
+    ...room,
+    members: room.members || "",
+    is_group: Number(room.is_group),
+  }));
+}
+
+function hydrateDataFromCache() {
+  try {
+    const raw = localStorage.getItem(DATA_CACHE_KEY);
+    if (!raw) return;
+    const cache = JSON.parse(raw);
+    const userId = store.getState().user?.id;
+    if (!userId || cache.userId !== userId) {
+      return;
+    }
+    if (Date.now() - cache.timestamp > DATA_CACHE_TTL) {
+      return;
+    }
+    if (Array.isArray(cache.friends)) {
+      store.setFriends(cache.friends);
+    }
+    if (Array.isArray(cache.friendRequests)) {
+      store.setFriendRequests(cache.friendRequests);
+    }
+    if (Array.isArray(cache.rooms)) {
+      store.setRooms(cache.rooms);
+    }
+  } catch (err) {
+    console.warn("Failed to hydrate cache", err);
+  }
+}
