@@ -83,4 +83,46 @@ export class ChatPanel {
           }
         });
       }
+///////////////
+  mount(container) {
+    container.innerHTML = '';
+    container.appendChild(this.root);
+    this.render(this.store.getState());
+  }
+
+  async ensureHistory(roomId) {
+    if (this.loadedRooms.has(roomId)) return;
+    
+    // Fetch messages from server (includes call history)
+    const messages = await this.http.get(`/rooms/${roomId}/messages`);
+    
+    this.store.setMessages(roomId, messages);
+    
+    if (messages.length) {
+      this.cursors[roomId] = messages[0].createdAt;
+    }
+    this.loadedRooms.add(roomId);
+    this.scrollToBottom();
+  }
+
+  loadHistory(roomId, options = {}) {
+    if (!roomId) return;
+    const execute = () => this.ensureHistory(roomId);
+    if (options.defer && typeof window !== 'undefined') {
+      const scheduler = window.requestIdleCallback || window.requestAnimationFrame || ((cb) => setTimeout(cb, 16));
+      scheduler(execute);
+    } else {
+      execute();
+    }
+  }
+
+  async loadOlder(roomId) {
+    const before = this.cursors[roomId];
+    if (!before) return;
+    const older = await this.http.get(`/rooms/${roomId}/messages?before=${before}`);
+    if (older.length) {
+      this.cursors[roomId] = older[0].createdAt;
+      this.store.prependMessages(roomId, older);
+    }
+  }
 }
