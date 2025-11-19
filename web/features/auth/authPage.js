@@ -212,3 +212,42 @@ function scrollToSection(id) {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
+
+function initAuthTabs(elements) {
+  elements.tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const mode = tab.dataset.authTab;
+      elements.tabs.forEach((btn) => btn.setAttribute('aria-selected', btn === tab ? 'true' : 'false'));
+      elements.form.dataset.mode = mode;
+      elements.displayField.style.display = mode === 'register' ? 'flex' : 'none';
+      clearErrors(elements);
+    });
+  });
+  elements.form.dataset.mode = 'login';
+  elements.displayField.style.display = 'none';
+}
+
+function initPasswordToggle(elements) {
+  elements.togglePasswordBtn.addEventListener('click', () => {
+    const input = elements.passwordInput;
+    const isVisible = input.type === 'text';
+    input.type = isVisible ? 'password' : 'text';
+    elements.togglePasswordBtn.textContent = isVisible ? 'Hiện' : 'Ẩn';
+    elements.togglePasswordBtn.setAttribute('aria-pressed', (!isVisible).toString());
+  });
+}
+
+function initForm(elements, http, store, onSuccess) {
+  elements.form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearErrors(elements);
+    const mode = elements.form.dataset.mode;
+    const payload = buildPayload(elements);
+    const errors = validatePayload(payload, mode);
+    if (Object.keys(errors).length) {
+      renderErrors(errors, elements);
+      return;
+    }
+    await submitAuth(payload, mode, elements, http, store, onSuccess);
+  });
+}
