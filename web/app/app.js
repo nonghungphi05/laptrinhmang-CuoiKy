@@ -203,3 +203,73 @@ function hydrateDataFromCache() {
     console.warn("Failed to hydrate cache", err);
   }
 }
+
+function persistDataCache({ friends, friendRequests, rooms }) {
+  try {
+    const userId = store.getState().user?.id;
+    if (!userId) return;
+    const payload = {
+      userId,
+      timestamp: Date.now(),
+      friends,
+      friendRequests,
+      rooms,
+    };
+    localStorage.setItem(DATA_CACHE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.warn("Failed to cache data", err);
+  }
+}
+
+function scheduleHistoryLoad(roomId, options = {}) {
+  if (!roomId || !chatPanel) return;
+  chatPanel.loadHistory(roomId, options);
+}
+
+function selectRoom(roomId) {
+  store.setCurrentRoom(roomId);
+  // Save to localStorage
+  localStorage.setItem("messzola_last_room", roomId);
+  scheduleHistoryLoad(roomId);
+}
+
+async function startDirectRoom(peerId) {
+  try {
+    const room = await http.post("/rooms/direct", { peerId });
+    const rooms = await http.get("/rooms");
+    store.setRooms(formatRooms(rooms));
+    store.setCurrentRoom(room.id);
+    store.setView("chat");
+    // Save to localStorage
+    localStorage.setItem("messzola_last_room", room.id);
+    scheduleHistoryLoad(room.id);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function handleLogout() {
+  await rtcClient.stop();
+  wsClient.disconnect();
+  localStorage.removeItem("messzola_token");
+  localStorage.removeItem("messzola_last_room");
+  localStorage.removeItem("messzola_view");
+  localStorage.removeItem(DATA_CACHE_KEY);
+  store.setState({
+    token: null,
+    user: null,
+    rooms: [],
+    friends: [],
+    currentRoomId: null,
+    messages: {},
+    view: "chat",
+  });
+  if (shell) {
+    shell.destroy();
+    shell = null;
+  }
+  appMount.innerHTML = "";
+  showAuth();
+}
+
+bootstrap();
