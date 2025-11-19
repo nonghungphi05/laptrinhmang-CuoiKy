@@ -214,3 +214,84 @@ export class GroupPanel {
     });
   }
 }
+export class GroupPanel {
+  openInviteDialog(group) {
+    const friends = this.latestState?.friends || [];
+    const memberSet = new Set((group.members || '').split(',').filter(Boolean));
+    const eligibleFriends = friends.filter((friend) => !memberSet.has(friend.id));
+    if (!eligibleFriends.length) {
+      alert('Không còn bạn bè nào để mời vào nhóm này');
+      return;
+    }
+    this.closeInviteDialog();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = `position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 9999;`;
+    overlay.innerHTML = `
+      <div class="modal" style="background: #fff; padding: 24px; border-radius: 12px; width: min(420px, 90%); max-height: 80vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.25);">
+        <h3 style="margin-top: 0;">Mời bạn bè vào "${this.escape(group.name)}"</h3>
+        <form data-invite-form>
+          <div class="checkbox-group" data-invite-list style="margin-bottom: 16px;">
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" data-close-modal class="btn-secondary">Hủy</button>
+            <button type="submit" class="btn-primary">Mời</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    this.inviteDialog = overlay;
+    const list = overlay.querySelector('[data-invite-list]');
+    list.innerHTML = eligibleFriends.map((friend) => {
+      const name = friend.display_name || friend.displayName || friend.phone;
+      return `
+        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <input type="checkbox" value="${friend.id}" />
+          <span>${this.escape(name)}</span>
+        </label>
+      `;
+    }).join('');
+
+    overlay.querySelector('[data-close-modal]').addEventListener('click', () => this.closeInviteDialog());
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        this.closeInviteDialog();
+      }
+    });
+
+    const form = overlay.querySelector('[data-invite-form]');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const checked = list.querySelectorAll('input[type="checkbox"]:checked');
+      const memberIds = Array.from(checked).map((cb) => cb.value);
+      if (memberIds.length === 0) {
+        alert('Vui lòng chọn ít nhất một người bạn');
+        return;
+      }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Đang mời...';
+      try {
+        await this.http.post(`/rooms/${group.id}/members`, { memberIds });
+        await this.reloadRooms();
+        this.closeInviteDialog();
+        alert('Đã gửi lời mời thành công');
+      } catch (err) {
+        console.error('Invite members error:', err);
+        alert(err.message || 'Không thể mời thành viên');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }
+    });
+  }
+
+  closeInviteDialog() {
+    if (this.inviteDialog) {
+      this.inviteDialog.remove();
+      this.inviteDialog = null;
+    }
+  }
+}
