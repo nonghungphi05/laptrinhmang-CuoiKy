@@ -251,3 +251,28 @@ function initForm(elements, http, store, onSuccess) {
     await submitAuth(payload, mode, elements, http, store, onSuccess);
   });
 }
+
+function buildPayload(elements) {
+  const phoneValue = elements.phoneInput.value.trim();
+  return {
+    phone: phoneValue,
+    password: elements.passwordInput.value,
+    displayName: elements.displayInput.value.trim()
+  };
+}
+
+function validatePayload(payload, mode) {
+  const errors = {};
+  // Validate phone: chỉ số, 9-11 ký tự
+  const phoneDigits = payload.phone.replace(/\D/g, '');
+  if (phoneDigits.length < 9 || phoneDigits.length > 11) {
+    errors.phone = 'Vui lòng nhập số điện thoại hợp lệ (9-11 số).';
+  }
+  if (!payload.password || payload.password.length < 6) {
+    errors.password = 'Mật khẩu tối thiểu 6 ký tự.';
+  }
+  if (mode === 'register' && payload.displayName.length < 2) {
+    errors.displayName = 'Tên hiển thị tối thiểu 2 ký tự.';
+  }
+  return errors;
+}
