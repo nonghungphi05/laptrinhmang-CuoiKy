@@ -175,3 +175,40 @@ const FEATURES = [
       </footer>
     `;
   }
+  
+function collectElements(root) {
+  return {
+    tabs: root.querySelectorAll('[data-auth-tab]'),
+    form: root.querySelector('#authForm'),
+    displayField: root.querySelector('[data-display-name]'),
+    submitBtn: root.querySelector('.auth-submit'),
+    errors: {
+      phone: root.querySelector('#error-phone'),
+      password: root.querySelector('#error-password'),
+      displayName: root.querySelector('#error-displayName'),
+      global: root.querySelector('#error-global')
+    },
+    phoneInput: root.querySelector('#phoneInput'),
+    passwordInput: root.querySelector('#passwordInput'),
+    displayInput: root.querySelector('#displayNameInput'),
+    togglePasswordBtn: root.querySelector('[data-toggle-password]')
+  };
+}
+
+function initNavScroll(root) {
+  const buttons = root.querySelectorAll('[data-scroll]');
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => scrollToSection(btn.dataset.scroll));
+  });
+  const navButtons = root.querySelectorAll('[data-nav]');
+  navButtons.forEach((btn) => {
+    btn.addEventListener('click', () => scrollToSection(btn.dataset.nav));
+  });
+}
+
+function scrollToSection(id) {
+  const target = document.querySelector(`[data-section="${id}"]`) || document.getElementById(id);
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
