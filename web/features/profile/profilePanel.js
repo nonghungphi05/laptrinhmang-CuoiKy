@@ -88,3 +88,37 @@ export class ProfilePanel {
     });
   }
 }
+export class ProfilePanel {
+  mount(container) {
+    container.innerHTML = '';
+    container.appendChild(this.root);
+    this.render(this.store.getState());
+  }
+
+  render(state) {
+    if (state.view !== 'profile') {
+      this.root.style.display = 'none';
+      return;
+    }
+    this.root.style.display = 'block';
+    const user = state.user || {};
+    this.profileForm.phone.value = user.phone || '';
+    this.profileForm.displayName.value = user.displayName || '';
+    this.profileForm.bio.value = user.bio || '';
+    
+    // Update avatar preview
+    const avatarImage = this.root.querySelector('#avatarImage');
+    const avatarInitial = this.root.querySelector('#avatarInitial');
+    
+    if (user.avatarUrl) {
+      avatarImage.src = user.avatarUrl;
+      avatarImage.style.display = 'block';
+      avatarInitial.style.display = 'none';
+    } else {
+      avatarImage.style.display = 'none';
+      avatarInitial.style.display = 'block';
+      const initial = (user.displayName || user.phone || 'U').charAt(0).toUpperCase();
+      avatarInitial.textContent = initial;
+    }
+  }
+}
