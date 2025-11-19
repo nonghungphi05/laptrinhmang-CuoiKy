@@ -295,3 +295,49 @@ export class GroupPanel {
     }
   }
 }
+export class GroupPanel {
+  escape(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  getTemplate() {
+    return `
+      <div class="panel-container">
+        <h2>Nhóm</h2>
+        
+        <section class="panel-section">
+          <h3>Tạo nhóm mới</h3>
+          <form data-create-group-form>
+            <div class="form-field">
+              <label>Tên nhóm</label>
+              <input type="text" data-group-name placeholder="Nhập tên nhóm..." required />
+            </div>
+            
+            <div class="form-field">
+              <label>Chọn thành viên</label>
+              <div class="checkbox-group" data-group-friends>
+              </div>
+            </div>
+            
+            <button type="submit" class="btn-primary">Tạo nhóm</button>
+          </form>
+        </section>
+        
+        <section class="panel-section">
+          <h3>Danh sách nhóm</h3>
+          <div class="groups-list" data-groups-list>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  destroy() {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+    }
+    this.closeInviteDialog();
+  }
+}
