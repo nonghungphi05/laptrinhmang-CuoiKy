@@ -320,4 +320,116 @@ export class AppShell {
       });
     });
   }
+
+  renderGroupsList(state) {
+    const groups = state.rooms ? state.rooms.filter((r) => r.is_group) : [];
+
+    if (groups.length === 0) {
+      this.sidebarContent.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">👨‍👩‍👧‍👦</div>
+          <h3>Chưa có nhóm</h3>
+          <p>Tạo nhóm mới để trò chuyện cùng nhiều người</p>
+        </div>
+      `;
+      return;
+    }
+
+    const items = groups.map((group) => {
+      const initial = group.name.charAt(0).toUpperCase();
+      const members = group.members ? group.members.split(",").length : 0;
+      const lastMessage = this.getLastMessage(state, group.id);
+
+      return `
+        <div class="sidebar-item ${
+          state.currentRoomId === group.id ? "active" : ""
+        }" data-room-id="${group.id}">
+          <div class="sidebar-avatar group">${initial}</div>
+          <div class="sidebar-info">
+            <strong>${this.escape(group.name)}</strong>
+            <small>${lastMessage || `${members} thành viên`}</small>
+          </div>
+        </div>
+      `;
+    });
+
+    this.sidebarContent.innerHTML = items.join("");
+    this.sidebarContent.querySelectorAll("[data-room-id]").forEach((el) => {
+      el.addEventListener("click", () => this.onSelectRoom(el.dataset.roomId));
+    });
+  }
+
+  getLastMessage(state, roomId) {
+    const messages = state.messages[roomId];
+    if (!messages || messages.length === 0) return "";
+    const last = messages[messages.length - 1];
+    const preview = last.content ? last.content.substring(0, 30) : "📎 File";
+    return preview.length < (last.content?.length || 0)
+      ? preview + "..."
+      : preview;
+  }
+
+  escape(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  renderProfileMenu(state) {
+    this.sidebarContent.innerHTML = `
+      <div class="sidebar-menu-list">
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">👤</span>
+          <span>Thông tin cá nhân</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">🔒</span>
+          <span>Quyền riêng tư</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">🔔</span>
+          <span>Thông báo</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">🎨</span>
+          <span>Giao diện</span>
+        </div>
+      </div>
+    `;
+  }
+
+  renderSettingsMenu(state) {
+    this.sidebarContent.innerHTML = `
+      <div class="sidebar-menu-list">
+        <div class="sidebar-menu-item active">
+          <span class="menu-icon">⚙️</span>
+          <span>Cài đặt chung</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">🔔</span>
+          <span>Thông báo</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">🎨</span>
+          <span>Giao diện</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">🔒</span>
+          <span>Quyền riêng tư</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">🌐</span>
+          <span>Ngôn ngữ</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">💾</span>
+          <span>Dữ liệu và bộ nhớ</span>
+        </div>
+        <div class="sidebar-menu-item">
+          <span class="menu-icon">ℹ️</span>
+          <span>Về MessZola</span>
+        </div>
+      </div>
+    `;
+  }
 }
