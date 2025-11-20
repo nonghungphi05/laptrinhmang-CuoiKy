@@ -15,6 +15,7 @@ là ứng dụng trò chuyện thời gian thực gồm backend Node.js (Express
 ```
 ├─ server/
 │  ├─ core/            # HTTP, WS, RTC, DB, config
+|  |- data/            # upload, sql file           
 │  ├─ shared/          # Entity, Repository, Service, UseCase
 │  ├─ features/        # auth, user, friend, room, chat, call, file
 │  ├─ presentation/    # REST router + WS router
