@@ -46,14 +46,15 @@ export class RtcClient {
     this.hadRemotePeer = false;
     const stream = await this.ensureLocalStream();
     this.store.setCallState({ activeRoomId: roomId });
-
-     if (!isAnswering) {
+    
+    // Only send call notification if starting a new call (not answering)
+    if (!isAnswering) {
       const state = this.store.getState();
       const callerName = state.user?.displayName || state.user?.phone || 'Người dùng';
       this.wsClient.sendRtc({ t: 'rtc-call-start', roomId, callerName });
     }
     
-   
+    // Then join room
     this.wsClient.sendRtc({ t: 'rtc-join', roomId });
     
     return stream;
@@ -85,6 +86,7 @@ export class RtcClient {
     }
     return this.localStream;
   }
+
   async stop() {
     const currentRoomId = this.roomId;
     const hadPeers = this.hadRemotePeer;
@@ -211,3 +213,154 @@ export class RtcClient {
         break;
     }
   }
+
+  showCallDeclinedNotification() {
+    this.showNotification('📞', 'Cuộc gọi đã bị từ chối', 'rgba(220, 38, 38, 0.95)');
+  }
+
+  showCallEndedNotification() {
+    this.showNotification('📞', 'Người kia đã kết thúc cuộc gọi', 'rgba(100, 116, 139, 0.95)');
+  }
+
+  showNotification(icon, text, bgColor) {
+    // Create a temporary notification element
+    const notification = document.createElement('div');
+    notification.className = 'call-notification';
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-icon">${icon}</span>
+        <span class="notification-text">${text}</span>
+      </div>
+    `;
+    
+    // Add styles inline
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: ${bgColor};
+      color: white;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 10000;
+      animation: slideDown 0.3s ease-out;
+      font-size: 16px;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 2 seconds
+    setTimeout(() => {
+      notification.style.animation = 'slideUp 0.3s ease-out';
+      setTimeout(() => notification.remove(), 300);
+    }, 2000);
+  }
+
+  async ensurePeer(peerId, initiator) {
+    if (this.peerConnections.has(peerId)) {
+      return this.peerConnections.get(peerId);
+    }
+    return this.createPeer(peerId, initiator);
+  }
+
+  async createPeer(peerId, initiator) {
+    console.log(`🔗 Creating peer connection with ${peerId}, initiator: ${initiator}`);
+    
+    await this.ensureLocalStream();
+    
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    this.peerConnections.set(peerId, pc);
+    
+    // Add local tracks to peer connection
+    this.localStream.getTracks().forEach((track) => {
+      console.log(`➕ Adding ${track.kind} track to peer ${peerId}`);
+      pc.addTrack(track, this.localStream);
+    });
+    
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        this.wsClient.sendRtc({ t: 'rtc-ice', roomId: this.roomId, to: peerId, candidate: event.candidate });
+      }
+    };
+    
+    pc.ontrack = (event) => {
+      console.log(`📥 Received ${event.track.kind} track from peer ${peerId}`);
+      console.log('Stream:', event.streams[0], 'Tracks:', event.streams[0].getTracks().map(t => `${t.kind}: ${t.enabled}`));
+      this.remoteStreams.set(peerId, event.streams[0]);
+      this.emit();
+    };
+    
+    pc.onconnectionstatechange = () => {
+      console.log(`🔌 Peer ${peerId} connection state: ${pc.connectionState}`);
+      if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        this.closePeer(peerId);
+      }
+    };
+    
+    if (initiator) {
+      console.log(`📤 Creating offer for peer ${peerId}`);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      this.wsClient.sendRtc({ t: 'rtc-offer', roomId: this.roomId, to: peerId, sdp: offer });
+    }
+    
+    return pc;
+  }
+
+  closePeer(peerId) {
+    const pc = this.peerConnections.get(peerId);
+    if (pc) {
+      pc.close();
+      this.peerConnections.delete(peerId);
+    }
+    const stream = this.remoteStreams.get(peerId);
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      this.remoteStreams.delete(peerId);
+    }
+    const peers = (this.store.getState().call.peers || []).filter((id) => id !== peerId);
+    this.store.setCallState({ peers });
+    this.emit();
+  }
+
+  toggleAudio() {
+    if (!this.localStream) return;
+    this.micEnabled = !this.micEnabled;
+    this.localStream.getAudioTracks().forEach((track) => {
+      track.enabled = this.micEnabled;
+    });
+    return this.micEnabled;
+  }
+
+  toggleVideo() {
+    if (!this.localStream) return;
+    this.camEnabled = !this.camEnabled;
+    this.localStream.getVideoTracks().forEach((track) => {
+      track.enabled = this.camEnabled;
+    });
+    return this.camEnabled;
+  }
+
+  async shareScreen() {
+    if (!this.roomId) return;
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const screenTrack = screenStream.getVideoTracks()[0];
+    this.peerConnections.forEach((pc) => {
+      const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
+      if (sender) {
+        sender.replaceTrack(screenTrack);
+      }
+    });
+    screenTrack.onended = () => {
+      const videoTrack = this.localStream.getVideoTracks()[0];
+      this.peerConnections.forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
+        if (sender) {
+          sender.replaceTrack(videoTrack);
+        }
+      });
+    };
+  }
+}
