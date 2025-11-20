@@ -43,3 +43,89 @@ export class WsClient {
       setTimeout(() => this.open(), delay);
     };
   }
+
+  flushQueue() {
+    while (this.queue.length && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(this.queue.shift());
+    }
+  }
+
+  send(payload) {
+    const message = JSON.stringify(payload);
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(message);
+    } else {
+      this.queue.push(message);
+    }
+  }
+
+  sendMessage(roomId, text) {
+    this.send({ t: 'send', roomId, text });
+  }
+
+  sendTyping(roomId, on) {
+    this.send({ t: 'typing', roomId, on });
+  }
+
+  sendRtc(payload) {
+    this.send(payload);
+  }
+
+  handleMessage(event) {
+    try {
+      const data = JSON.parse(event.data);
+      switch (data.t) {
+        case 'msg':
+          this.store.addMessage(data.roomId, data.message);
+          break;
+        case 'typing':
+          this.store.setTyping(data.roomId, data.from, data.on);
+          break;
+        case 'room-disbanded': {
+          const currentRoomId = this.store.getState().currentRoomId;
+          if (typeof this.store.removeRoom === 'function') {
+            this.store.removeRoom(data.roomId);
+          }
+          if (currentRoomId && currentRoomId === data.roomId) {
+            alert('Nhóm chat đã bị giải tán bởi chủ phòng');
+          }
+          break;
+        }
+        case 'room-updated':
+          if (typeof this.store.upsertRoom === 'function') {
+            const room = {
+              ...data.room,
+              is_group: Number(data.room?.is_group)
+            };
+            this.store.upsertRoom(room);
+          }
+          break;
+        case 'online-users':
+          // Initial list of online users
+          this.store.setOnlineUsers(data.users);
+          break;
+        case 'user-status':
+          // User went online/offline
+          this.store.setUserOnline(data.userId, data.status === 'online');
+          break;
+        case 'rtc-call-incoming':
+        case 'rtc-call-declined':
+        case 'rtc-call-cancelled':
+        case 'rtc-peers':
+        case 'rtc-joined':
+        case 'rtc-left':
+        case 'rtc-offer':
+        case 'rtc-answer':
+        case 'rtc-ice':
+          if (this.rtcHandler) {
+            this.rtcHandler(data);
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      console.error('WS parse error', err);
+    }
+  }
+}
