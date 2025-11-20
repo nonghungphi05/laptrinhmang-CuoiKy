@@ -122,3 +122,64 @@ export class ProfilePanel {
     }
   }
 }
+export class ProfilePanel {
+  getTemplate() {
+    return `
+      <div class="panel-container">
+        <h2>Trang cá nhân</h2>
+        
+        <section class="panel-section">
+          <h3>Ảnh đại diện</h3>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+            <div id="avatarPreview" style="width: 120px; height: 120px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, var(--color-primary), #8EA3FF); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(109, 131, 242, 0.3);">
+              <span id="avatarInitial" style="font-size: 3rem; color: #fff; font-weight: 600;">U</span>
+              <img id="avatarImage" src="" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; display: none;" />
+            </div>
+            <input type="file" id="avatarInput" accept="image/*" style="display: none;" />
+            <button type="button" id="uploadAvatarBtn" class="btn-primary">Chọn ảnh avatar</button>
+            <p id="avatarMsg" style="color: var(--color-accent); margin-top: 0.5rem;"></p>
+          </div>
+        </section>
+        
+        <section class="panel-section">
+          <h3>Thông tin cá nhân</h3>
+          <form data-profile-form>
+            <div class="form-field">
+              <label>Số điện thoại</label>
+              <input name="phone" disabled style="background: var(--color-bg); cursor: not-allowed;" />
+            </div>
+            <div class="form-field">
+              <label>Tên hiển thị</label>
+              <input name="displayName" required />
+            </div>
+            <div class="form-field">
+              <label>Giới thiệu</label>
+              <textarea name="bio" rows="3" placeholder="Viết vài dòng về bạn..."></textarea>
+            </div>
+            <p data-profile-msg style="color: var(--color-accent);"></p>
+            <button type="submit" class="btn-primary">Lưu hồ sơ</button>
+          </form>
+        </section>
+        
+        <section class="panel-section">
+          <h3>Bảo mật</h3>
+          <form data-password-form>
+            <input type="text" name="username" autocomplete="username" style="display: none;" />
+            <div class="form-field">
+              <label>Mật khẩu mới</label>
+              <input type="password" name="password" autocomplete="new-password" required />
+            </div>
+            <p data-password-msg style="color: var(--color-accent);"></p>
+            <button type="submit" class="btn-primary">Đổi mật khẩu</button>
+          </form>
+        </section>
+      </div>
+    `;
+  }
+
+  destroy() {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+    }
+  }
+}
