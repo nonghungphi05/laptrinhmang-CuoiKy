@@ -253,5 +253,70 @@ export class ChatPanel {
       .join('');
     this.scrollToBottom();
   }
-  
+  renderMessageGroup(group, userId) {
+    const isMe = group.senderId === userId;
+    const state = this.store.getState();
+    
+    // If this is a call history group, render it differently (centered, no avatar)
+    if (group.isCallHistory) {
+      const msg = group.messages[0];
+      return `<div class="call-history-wrapper">${this.renderCallHistoryMessage(msg, isMe)}</div>`;
+    }
+    
+    // Get proper display name, initial, and avatar
+    let displayName = group.senderName || 'User';
+    let initial = displayName.charAt(0).toUpperCase();
+    let avatarUrl = null;
+    
+    // If it's the current user
+    if (isMe) {
+      if (state.user) {
+        displayName = state.user.displayName || state.user.phone || 'Bạn';
+        initial = displayName.charAt(0).toUpperCase();
+        avatarUrl = state.user.avatarUrl || state.user.avatar_url;
+      }
+    } else {
+      // If it's a friend, get their avatar
+      const friend = state.friends?.find(f => f.id === group.senderId);
+      if (friend) {
+        displayName = friend.display_name || friend.displayName || friend.phone;
+        initial = displayName.charAt(0).toUpperCase();
+        avatarUrl = friend.avatar_url || friend.avatarUrl;
+      }
+    }
+    
+    // Generate color based on senderId for consistent avatar colors
+    const avatarColor = this.getAvatarColor(group.senderId);
+    
+    // Avatar content: image or initial
+    const avatarContent = avatarUrl
+      ? `<img src="${avatarUrl}" alt="${this.escape(displayName)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
+      : initial;
+    
+    const messagesHtml = group.messages.map(msg => {
+      const filesMarkup = (msg.files || [])
+        .map((file) => `<a class="file-pill" href="${file.url}" target="_blank">${this.escape(file.name)} (${Math.round(file.size / 1024)} KB)</a>`)
+        .join('');
+      const time = new Date(msg.createdAt || msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      
+      return `
+        <div class="message ${isMe ? 'me' : ''}">
+          ${this.escape(msg.content || '')}
+          ${filesMarkup}
+          <small>${time}</small>
+        </div>
+      `;
+    }).join('');
+    
+    return `
+      <div class="message-group ${isMe ? 'me' : ''}">
+        <div class="message-avatar" style="background: ${avatarColor};">${avatarContent}</div>
+        <div class="message-content">
+          ${!isMe ? `<div class="message-sender">${this.escape(displayName)}</div>` : ''}
+          ${messagesHtml}
+        </div>
+      </div>
+    `;
+  }
+
 }
