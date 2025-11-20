@@ -202,4 +202,251 @@ export class ChatPanel {
     const typers = state.typing[state.currentRoomId] || [];
     this.typingEl.style.display = typers.length ? 'flex' : 'none';
   }
+  renderMessages(messages, userId) {
+    if (!messages.length) {
+      this.messageList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">💬</div>
+          <h3>Chưa có tin nhắn</h3>
+          <p>Bắt đầu cuộc trò chuyện bằng cách gửi tin nhắn đầu tiên</p>
+        </div>
+      `;
+      return;
+    }
+    
+    console.log('Rendering messages:', messages.length, messages);
+    
+    const maxRender = 200;
+    const slice = messages.length > maxRender ? messages.slice(messages.length - maxRender) : messages;
+    
+    // Group messages by sender, but call-history messages are standalone
+    const grouped = [];
+    let currentGroup = null;
+    
+    slice.forEach((msg) => {
+      // Call history messages are standalone (not grouped)
+      if (msg.type === 'call-history') {
+        grouped.push({
+          senderId: msg.senderId || msg.sender_id,
+          senderName: msg.senderName || 'User',
+          messages: [msg],
+          isCallHistory: true
+        });
+        currentGroup = null; // Reset current group
+      } else {
+        const msgSenderId = msg.senderId || msg.sender_id;
+        if (!currentGroup || currentGroup.senderId !== msgSenderId) {
+          currentGroup = {
+            senderId: msgSenderId,
+            senderName: msg.senderName || 'User',
+            messages: [],
+            isCallHistory: false
+          };
+          grouped.push(currentGroup);
+        }
+        currentGroup.messages.push(msg);
+      }
+    });
+    
+    this.messageList.innerHTML = grouped
+      .map((group) => this.renderMessageGroup(group, userId))
+      .join('');
+    this.scrollToBottom();
+  }
+  renderMessageGroup(group, userId) {
+    const isMe = group.senderId === userId;
+    const state = this.store.getState();
+    
+    // If this is a call history group, render it differently (centered, no avatar)
+    if (group.isCallHistory) {
+      const msg = group.messages[0];
+      return `<div class="call-history-wrapper">${this.renderCallHistoryMessage(msg, isMe)}</div>`;
+    }
+    
+    // Get proper display name, initial, and avatar
+    let displayName = group.senderName || 'User';
+    let initial = displayName.charAt(0).toUpperCase();
+    let avatarUrl = null;
+    
+    // If it's the current user
+    if (isMe) {
+      if (state.user) {
+        displayName = state.user.displayName || state.user.phone || 'Bạn';
+        initial = displayName.charAt(0).toUpperCase();
+        avatarUrl = state.user.avatarUrl || state.user.avatar_url;
+      }
+    } else {
+      // If it's a friend, get their avatar
+      const friend = state.friends?.find(f => f.id === group.senderId);
+      if (friend) {
+        displayName = friend.display_name || friend.displayName || friend.phone;
+        initial = displayName.charAt(0).toUpperCase();
+        avatarUrl = friend.avatar_url || friend.avatarUrl;
+      }
+    }
+    
+    // Generate color based on senderId for consistent avatar colors
+    const avatarColor = this.getAvatarColor(group.senderId);
+    
+    // Avatar content: image or initial
+    const avatarContent = avatarUrl
+      ? `<img src="${avatarUrl}" alt="${this.escape(displayName)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
+      : initial;
+    
+    const messagesHtml = group.messages.map(msg => {
+      const filesMarkup = (msg.files || [])
+        .map((file) => `<a class="file-pill" href="${file.url}" target="_blank">${this.escape(file.name)} (${Math.round(file.size / 1024)} KB)</a>`)
+        .join('');
+      const time = new Date(msg.createdAt || msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      
+      return `
+        <div class="message ${isMe ? 'me' : ''}">
+          ${this.escape(msg.content || '')}
+          ${filesMarkup}
+          <small>${time}</small>
+        </div>
+      `;
+    }).join('');
+    
+    return `
+      <div class="message-group ${isMe ? 'me' : ''}">
+        <div class="message-avatar" style="background: ${avatarColor};">${avatarContent}</div>
+        <div class="message-content">
+          ${!isMe ? `<div class="message-sender">${this.escape(displayName)}</div>` : ''}
+          ${messagesHtml}
+        </div>
+      </div>
+    `;
+  }
+  renderCallHistoryMessage(msg, isMe) {
+    const time = new Date(msg.created_at || msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    
+    // Parse metadata if it's a string
+    let callStatus = msg.call_status;
+    if (!callStatus && msg.metadata) {
+      try {
+        const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+        callStatus = metadata.call_status;
+      } catch (err) {
+        console.error('Failed to parse call history metadata:', err);
+      }
+    }
+    
+    let icon = '';
+    let text = '';
+    let statusClass = '';
+    
+    switch (callStatus) {
+      case 'declined':
+        text = isMe ? 'Cuộc gọi bị từ chối' : 'Đã từ chối cuộc gọi';
+        statusClass = 'declined';
+        break;
+      case 'missed':
+        text = isMe ? 'Cuộc gọi nhỡ' : 'Cuộc gọi nhỡ';
+        statusClass = 'missed';
+        break;
+      case 'completed':
+        text = 'Cuộc gọi đã kết thúc';
+        statusClass = 'completed';
+        break;
+      default:
+        text = 'Cuộc gọi';
+    }
+    
+    return `
+      <div class="message call-history ${statusClass}">
+        <span class="call-icon">${icon}</span>
+        <span class="call-text">${text}</span>
+        <small>${time}</small>
+      </div>
+    `;
+  }
+
+  getAvatarColor(userId) {
+    // Generate consistent color based on userId
+    const colors = [
+      'linear-gradient(135deg, #6D83F2, #8EA3FF)',
+      'linear-gradient(135deg, #F29D52, #FFB87A)',
+      'linear-gradient(135deg, #10B981, #34D399)',
+      'linear-gradient(135deg, #8B5CF6, #A78BFA)',
+      'linear-gradient(135deg, #EF4444, #F87171)',
+      'linear-gradient(135deg, #06B6D4, #22D3EE)',
+      'linear-gradient(135deg, #F59E0B, #FBBF24)',
+      'linear-gradient(135deg, #EC4899, #F472B6)'
+    ];
+    
+    // Simple hash function to get consistent color for same userId
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+      hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  }
+
+  scrollToBottom() {
+    setTimeout(() => {
+      this.messageList.scrollTop = this.messageList.scrollHeight;
+    }, 50);
+  }
+
+  getTemplate() {
+    return `
+      <div class="chat-header">
+        <div class="chat-header-info">
+          <div class="chat-header-avatar sidebar-avatar" data-chat-avatar>💬</div>
+          <div class="chat-header-details">
+            <h3 data-chat-name>Chọn một cuộc trò chuyện</h3>
+            <p data-chat-status>Chọn từ danh sách bên trái</p>
+          </div>
+        </div>
+        <div class="chat-header-actions">
+          <button type="button" data-call class="icon-btn call-btn" title="Gọi video">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14v1a3 3 0 01-3 3H4a3 3 0 01-3-3V8a3 3 0 013-3h8a3 3 0 013 3v2z" />
+            </svg>
+          </button>
+          <button type="button" data-info class="icon-btn" title="Chi tiết">ℹ️</button>
+        </div>
+      </div>
+      <div class="message-list" data-message-list>
+        <div class="empty-state">
+          <div class="empty-state-icon">💬</div>
+          <h3>Chưa có tin nhắn</h3>
+          <p>Bắt đầu cuộc trò chuyện bằng cách gửi tin nhắn đầu tiên</p>
+        </div>
+      </div>
+      <div class="typing-indicator" data-typing style="display:none;">
+        <div class="typing-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <span>Đang nhập...</span>
+      </div>
+      <form class="chat-input" data-message-form>
+        <div class="chat-input-wrapper">
+          <div class="chat-input-actions">
+            <button type="button" title="Emoji">😊</button>
+            <label title="Đính kèm file">
+              📎
+              <input type="file" data-file-input style="display:none;" />
+            </label>
+          </div>
+          <input data-message-input placeholder="Nhập tin nhắn..." />
+        </div>
+        <button type="submit" class="send-btn" title="Gửi">➤</button>
+      </form>
+    `;
+  }
+
+  escape(value) {
+    return (value || '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char]));
+  }
 }
